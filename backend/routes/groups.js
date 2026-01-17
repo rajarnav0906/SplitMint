@@ -9,6 +9,11 @@ import {
   updateParticipant,
   removeParticipant
 } from '../controllers/groupController.js';
+import {
+  getBalances,
+  getSettlements,
+  getUserBalance
+} from '../controllers/balanceController.js';
 import { authenticate } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -27,5 +32,10 @@ router.delete('/:id', deleteGroup); // DELETE /api/groups/:id - Delete group
 router.post('/:id/participants', addParticipant); // POST /api/groups/:id/participants - Add participant
 router.put('/:id/participants/:participantId', updateParticipant); // PUT /api/groups/:id/participants/:participantId - Update participant
 router.delete('/:id/participants/:participantId', removeParticipant); // DELETE /api/groups/:id/participants/:participantId - Remove participant
+
+// Balance and settlement routes
+router.get('/:id/balances', getBalances); // GET /api/groups/:id/balances - Get all balances for group
+router.get('/:id/settlements', getSettlements); // GET /api/groups/:id/settlements - Get settlement suggestions
+router.get('/:id/balance/user', getUserBalance); // GET /api/groups/:id/balance/user - Get user-specific balance
 
 export default router;
