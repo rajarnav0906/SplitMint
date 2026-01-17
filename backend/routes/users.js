@@ -1,11 +1,5 @@
 import express from 'express';
-import {
-  getExpenses,
-  getExpense,
-  createExpense,
-  updateExpense,
-  deleteExpense
-} from '../controllers/expenseController.js';
+import { searchUsers } from '../controllers/userController.js';
 import { authenticate } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -31,11 +25,6 @@ const catchAsync = (fn) => {
 };
 
 router.use(authenticate);
-
-router.get('/', catchAsync(getExpenses));
-router.get('/:id', catchAsync(getExpense));
-router.post('/', catchAsync(createExpense));
-router.put('/:id', catchAsync(updateExpense));
-router.delete('/:id', catchAsync(deleteExpense));
+router.get('/search', catchAsync(searchUsers));
 
 export default router;

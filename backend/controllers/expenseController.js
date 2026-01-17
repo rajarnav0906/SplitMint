@@ -2,8 +2,7 @@ import Expense from '../models/Expense.js';
 import Group from '../models/Group.js';
 import { calculateSplits } from '../services/splitCalculator.js';
 
-// Get all expenses for a group
-export const getExpenses = async (req, res, next) => {
+export const getExpenses = async (req, res) => {
   try {
     const { groupId } = req.query;
 
@@ -14,7 +13,6 @@ export const getExpenses = async (req, res, next) => {
       });
     }
 
-    // Verify group exists and user has access
     const group = await Group.findById(groupId);
     if (!group) {
       return res.status(404).json({
@@ -23,7 +21,6 @@ export const getExpenses = async (req, res, next) => {
       });
     }
 
-    // Check if user has access to this group
     const hasAccess = group.createdBy.toString() === req.user._id.toString() ||
       group.participants.some(p => p.userId && p.userId.toString() === req.user._id.toString());
 
@@ -34,8 +31,8 @@ export const getExpenses = async (req, res, next) => {
       });
     }
 
-    // Get all expenses for the group, sorted by date (newest first)
     const expenses = await Expense.find({ group: groupId })
+      .populate('payer', 'name')
       .populate('createdBy', 'name email')
       .populate('group', 'name')
       .sort({ date: -1, createdAt: -1 });
@@ -46,18 +43,23 @@ export const getExpenses = async (req, res, next) => {
       data: { expenses }
     });
   } catch (error) {
-    next(error);
+    const statusCode = error.statusCode || 500;
+    const message = error.message || 'Internal Server Error';
+    res.status(statusCode).json({
+      success: false,
+      message
+    });
   }
 };
 
-// Get a single expense by ID
-export const getExpense = async (req, res, next) => {
+export const getExpense = async (req, res) => {
   try {
     const { id } = req.params;
 
     const expense = await Expense.findById(id)
       .populate('createdBy', 'name email')
-      .populate('group', 'name participants');
+      .populate('group', 'name participants')
+      .populate('payer', 'name');
 
     if (!expense) {
       return res.status(404).json({
@@ -66,7 +68,6 @@ export const getExpense = async (req, res, next) => {
       });
     }
 
-    // Verify user has access to the group
     const group = await Group.findById(expense.group._id);
     const hasAccess = group.createdBy.toString() === req.user._id.toString() ||
       group.participants.some(p => p.userId && p.userId.toString() === req.user._id.toString());
@@ -83,16 +84,19 @@ export const getExpense = async (req, res, next) => {
       data: { expense }
     });
   } catch (error) {
-    next(error);
+    const statusCode = error.statusCode || 500;
+    const message = error.message || 'Internal Server Error';
+    res.status(statusCode).json({
+      success: false,
+      message
+    });
   }
 };
 
-// Create a new expense
-export const createExpense = async (req, res, next) => {
+export const createExpense = async (req, res) => {
   try {
-    const { amount, description, date, payer, groupId, splitMode, participantIds, splits } = req.body;
+    const { amount, description, date, payer, group, splitMode, participantIds, splits } = req.body;
 
-    // Validate required fields
     if (!amount || amount <= 0) {
       return res.status(400).json({
         success: false,
@@ -107,6 +111,13 @@ export const createExpense = async (req, res, next) => {
       });
     }
 
+    if (description.trim().length > 200) {
+      return res.status(400).json({
+        success: false,
+        message: 'Expense description cannot exceed 200 characters.'
+      });
+    }
+
     if (!payer) {
       return res.status(400).json({
         success: false,
@@ -114,7 +125,7 @@ export const createExpense = async (req, res, next) => {
       });
     }
 
-    if (!groupId) {
+    if (!group) {
       return res.status(400).json({
         success: false,
         message: 'Group ID is required.'
@@ -128,18 +139,16 @@ export const createExpense = async (req, res, next) => {
       });
     }
 
-    // Verify group exists and user has access
-    const group = await Group.findById(groupId);
-    if (!group) {
+    const groupDoc = await Group.findById(group);
+    if (!groupDoc) {
       return res.status(404).json({
         success: false,
         message: 'Group not found.'
       });
     }
 
-    // Check if user has access to this group
-    const hasAccess = group.createdBy.toString() === req.user._id.toString() ||
-      group.participants.some(p => p.userId && p.userId.toString() === req.user._id.toString());
+    const hasAccess = groupDoc.createdBy.toString() === req.user._id.toString() ||
+      groupDoc.participants.some(p => p.userId && p.userId.toString() === req.user._id.toString());
 
     if (!hasAccess) {
       return res.status(403).json({
@@ -148,54 +157,62 @@ export const createExpense = async (req, res, next) => {
       });
     }
 
-    // Verify payer is a valid participant in the group
-    const payerExists = group.participants.some(
+    const payerExists = groupDoc.participants.some(
       p => p._id.toString() === payer.toString()
     );
 
     if (!payerExists) {
       return res.status(400).json({
         success: false,
-        message: 'Payer must be a participant in the group.'
+        message: 'Payer must be a valid participant in the group.'
       });
     }
 
-    // Calculate splits based on split mode
     let calculatedSplits;
     try {
       if (splitMode === 'equal') {
         if (!participantIds || participantIds.length === 0) {
-          return res.status(400).json({
-            success: false,
-            message: 'Participant IDs are required for equal split mode.'
-          });
+          const allParticipantIds = groupDoc.participants.map(p => p._id.toString());
+          calculatedSplits = calculateSplits(splitMode, amount, allParticipantIds, null);
+        } else {
+          if (participantIds.length === 0) {
+            return res.status(400).json({
+              success: false,
+              message: 'At least one participant must be selected for the split.'
+            });
+          }
+
+          const validParticipants = participantIds.every(pid =>
+            groupDoc.participants.some(p => p._id.toString() === pid.toString())
+          );
+
+          if (!validParticipants) {
+            return res.status(400).json({
+              success: false,
+              message: 'All selected participants must be valid participants in the group.'
+            });
+          }
+
+          const uniqueParticipantIds = [...new Set(participantIds)];
+          if (uniqueParticipantIds.length !== participantIds.length) {
+            return res.status(400).json({
+              success: false,
+              message: 'Duplicate participants are not allowed in the split.'
+            });
+          }
+
+          calculatedSplits = calculateSplits(splitMode, amount, uniqueParticipantIds, null);
         }
-
-        // Verify all participant IDs are valid
-        const validParticipants = participantIds.every(pid =>
-          group.participants.some(p => p._id.toString() === pid.toString())
-        );
-
-        if (!validParticipants) {
-          return res.status(400).json({
-            success: false,
-            message: 'All participant IDs must be valid participants in the group.'
-          });
-        }
-
-        calculatedSplits = calculateSplits(splitMode, amount, participantIds, null);
-      } else {
-        // Custom or percentage mode
+      } else if (splitMode === 'percentage') {
         if (!splits || splits.length === 0) {
           return res.status(400).json({
             success: false,
-            message: 'Splits are required for custom or percentage split mode.'
+            message: 'Splits are required for percentage split mode.'
           });
         }
 
-        // Verify all participant IDs in splits are valid
         const validParticipants = splits.every(split =>
-          group.participants.some(p => p._id.toString() === split.participantId.toString())
+          groupDoc.participants.some(p => p._id.toString() === split.participantId.toString())
         );
 
         if (!validParticipants) {
@@ -205,22 +222,70 @@ export const createExpense = async (req, res, next) => {
           });
         }
 
+        const participantIdSet = new Set();
+        for (const split of splits) {
+          if (participantIdSet.has(split.participantId.toString())) {
+            return res.status(400).json({
+              success: false,
+              message: 'Each participant can only appear once in the split.'
+            });
+          }
+          participantIdSet.add(split.participantId.toString());
+        }
+
+        calculatedSplits = calculateSplits(splitMode, amount, null, splits);
+      } else if (splitMode === 'custom') {
+        if (!splits || splits.length === 0) {
+          return res.status(400).json({
+            success: false,
+            message: 'Splits are required for custom split mode.'
+          });
+        }
+
+        const validParticipants = splits.every(split =>
+          groupDoc.participants.some(p => p._id.toString() === split.participantId.toString())
+        );
+
+        if (!validParticipants) {
+          return res.status(400).json({
+            success: false,
+            message: 'All participant IDs in splits must be valid participants in the group.'
+          });
+        }
+
+        const participantIdSet = new Set();
+        for (const split of splits) {
+          if (participantIdSet.has(split.participantId.toString())) {
+            return res.status(400).json({
+              success: false,
+              message: 'Each participant can only appear once in the split.'
+            });
+          }
+          participantIdSet.add(split.participantId.toString());
+        }
+
         calculatedSplits = calculateSplits(splitMode, amount, null, splits);
       }
     } catch (splitError) {
       return res.status(400).json({
         success: false,
-        message: splitError.message
+        message: splitError.message || 'Invalid split configuration.'
       });
     }
 
-    // Create new expense
+    if (!calculatedSplits || calculatedSplits.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'At least one split is required.'
+      });
+    }
+
     const expense = new Expense({
       amount: parseFloat(amount),
       description: description.trim(),
       date: date ? new Date(date) : new Date(),
       payer,
-      group: groupId,
+      group,
       splitMode,
       splits: calculatedSplits,
       createdBy: req.user._id
@@ -228,9 +293,9 @@ export const createExpense = async (req, res, next) => {
 
     await expense.save();
 
-    // Populate before sending response
     await expense.populate('createdBy', 'name email');
     await expense.populate('group', 'name');
+    await expense.populate('payer', 'name');
 
     res.status(201).json({
       success: true,
@@ -238,7 +303,6 @@ export const createExpense = async (req, res, next) => {
       data: { expense }
     });
   } catch (error) {
-    // Handle validation errors
     if (error.name === 'ValidationError') {
       const messages = Object.values(error.errors).map(err => err.message);
       return res.status(400).json({
@@ -247,17 +311,20 @@ export const createExpense = async (req, res, next) => {
         errors: messages
       });
     }
-    next(error);
+    const statusCode = error.statusCode || 500;
+    const message = error.message || 'Internal Server Error';
+    res.status(statusCode).json({
+      success: false,
+      message
+    });
   }
 };
 
-// Update an expense
-export const updateExpense = async (req, res, next) => {
+export const updateExpense = async (req, res) => {
   try {
     const { id } = req.params;
     const { amount, description, date, payer, splitMode, participantIds, splits } = req.body;
 
-    // Find the expense
     const expense = await Expense.findById(id).populate('group');
 
     if (!expense) {
@@ -267,7 +334,6 @@ export const updateExpense = async (req, res, next) => {
       });
     }
 
-    // Check if user is the creator or has access to the group
     const group = await Group.findById(expense.group._id);
     const hasAccess = expense.createdBy.toString() === req.user._id.toString() ||
       group.createdBy.toString() === req.user._id.toString() ||
@@ -280,7 +346,6 @@ export const updateExpense = async (req, res, next) => {
       });
     }
 
-    // Update fields if provided
     if (amount !== undefined) {
       if (amount <= 0) {
         return res.status(400).json({
@@ -298,6 +363,12 @@ export const updateExpense = async (req, res, next) => {
           message: 'Expense description cannot be empty.'
         });
       }
+      if (description.trim().length > 200) {
+        return res.status(400).json({
+          success: false,
+          message: 'Expense description cannot exceed 200 characters.'
+        });
+      }
       expense.description = description.trim();
     }
 
@@ -306,7 +377,6 @@ export const updateExpense = async (req, res, next) => {
     }
 
     if (payer !== undefined) {
-      // Verify payer is a valid participant
       const payerExists = group.participants.some(
         p => p._id.toString() === payer.toString()
       );
@@ -320,7 +390,6 @@ export const updateExpense = async (req, res, next) => {
       expense.payer = payer;
     }
 
-    // Recalculate splits if split mode or related data changed
     if (splitMode !== undefined || participantIds !== undefined || splits !== undefined) {
       const modeToUse = splitMode || expense.splitMode;
       const amountToUse = amount !== undefined ? parseFloat(amount) : expense.amount;
@@ -329,6 +398,12 @@ export const updateExpense = async (req, res, next) => {
       try {
         if (modeToUse === 'equal') {
           const idsToUse = participantIds || expense.splits.map(s => s.participantId);
+          if (!idsToUse || idsToUse.length === 0) {
+            return res.status(400).json({
+              success: false,
+              message: 'At least one participant must be selected for the split.'
+            });
+          }
           calculatedSplits = calculateSplits(modeToUse, amountToUse, idsToUse, null);
         } else {
           const splitsToUse = splits || expense.splits;
@@ -347,9 +422,9 @@ export const updateExpense = async (req, res, next) => {
 
     await expense.save();
 
-    // Populate before sending response
     await expense.populate('createdBy', 'name email');
     await expense.populate('group', 'name');
+    await expense.populate('payer', 'name');
 
     res.status(200).json({
       success: true,
@@ -365,16 +440,19 @@ export const updateExpense = async (req, res, next) => {
         errors: messages
       });
     }
-    next(error);
+    const statusCode = error.statusCode || 500;
+    const message = error.message || 'Internal Server Error';
+    res.status(statusCode).json({
+      success: false,
+      message
+    });
   }
 };
 
-// Delete an expense
-export const deleteExpense = async (req, res, next) => {
+export const deleteExpense = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Find the expense
     const expense = await Expense.findById(id).populate('group');
 
     if (!expense) {
@@ -384,7 +462,6 @@ export const deleteExpense = async (req, res, next) => {
       });
     }
 
-    // Check if user is the creator or has access to the group
     const group = await Group.findById(expense.group._id);
     const hasAccess = expense.createdBy.toString() === req.user._id.toString() ||
       group.createdBy.toString() === req.user._id.toString();
@@ -396,7 +473,6 @@ export const deleteExpense = async (req, res, next) => {
       });
     }
 
-    // Delete the expense
     await Expense.findByIdAndDelete(id);
 
     res.status(200).json({
@@ -404,6 +480,11 @@ export const deleteExpense = async (req, res, next) => {
       message: 'Expense deleted successfully.'
     });
   } catch (error) {
-    next(error);
+    const statusCode = error.statusCode || 500;
+    const message = error.message || 'Internal Server Error';
+    res.status(statusCode).json({
+      success: false,
+      message
+    });
   }
 };

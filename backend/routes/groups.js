@@ -18,24 +18,40 @@ import { authenticate } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// All routes require authentication
+const catchAsync = (fn) => {
+  return async (req, res, next) => {
+    try {
+      await fn(req, res);
+    } catch (err) {
+      if (res.headersSent) {
+        return;
+      }
+      
+      const statusCode = err.statusCode || err.status || 500;
+      const message = err.message || 'Internal Server Error';
+      
+      res.status(statusCode).json({
+        success: false,
+        message
+      });
+    }
+  };
+};
+
 router.use(authenticate);
 
-// Group CRUD routes
-router.get('/', getGroups); // GET /api/groups - Get all groups for user
-router.get('/:id', getGroup); // GET /api/groups/:id - Get single group
-router.post('/', createGroup); // POST /api/groups - Create new group
-router.put('/:id', updateGroup); // PUT /api/groups/:id - Update group
-router.delete('/:id', deleteGroup); // DELETE /api/groups/:id - Delete group
+router.get('/', catchAsync(getGroups));
+router.get('/:id', catchAsync(getGroup));
+router.post('/', catchAsync(createGroup));
+router.put('/:id', catchAsync(updateGroup));
+router.delete('/:id', catchAsync(deleteGroup));
 
-// Participant management routes
-router.post('/:id/participants', addParticipant); // POST /api/groups/:id/participants - Add participant
-router.put('/:id/participants/:participantId', updateParticipant); // PUT /api/groups/:id/participants/:participantId - Update participant
-router.delete('/:id/participants/:participantId', removeParticipant); // DELETE /api/groups/:id/participants/:participantId - Remove participant
+router.post('/:id/participants', catchAsync(addParticipant));
+router.put('/:id/participants/:participantId', catchAsync(updateParticipant));
+router.delete('/:id/participants/:participantId', catchAsync(removeParticipant));
 
-// Balance and settlement routes
-router.get('/:id/balances', getBalances); // GET /api/groups/:id/balances - Get all balances for group
-router.get('/:id/settlements', getSettlements); // GET /api/groups/:id/settlements - Get settlement suggestions
-router.get('/:id/balance/user', getUserBalance); // GET /api/groups/:id/balance/user - Get user-specific balance
+router.get('/:id/balances', catchAsync(getBalances));
+router.get('/:id/settlements', catchAsync(getSettlements));
+router.get('/:id/balance/user', catchAsync(getUserBalance));
 
 export default router;

@@ -7,12 +7,10 @@ import {
   calculateSummary
 } from '../services/balanceEngine.js';
 
-// Get balances for a group
-export const getBalances = async (req, res, next) => {
+export const getBalances = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Find the group
     const group = await Group.findById(id);
 
     if (!group) {
@@ -22,7 +20,6 @@ export const getBalances = async (req, res, next) => {
       });
     }
 
-    // Check if user has access to this group
     const hasAccess = group.createdBy.toString() === req.user._id.toString() ||
       group.participants.some(p => p.userId && p.userId.toString() === req.user._id.toString());
 
@@ -33,17 +30,22 @@ export const getBalances = async (req, res, next) => {
       });
     }
 
-    // Get all expenses for the group
     const expenses = await Expense.find({ group: id });
 
-    // Calculate balances
     const { balances, participantMap } = calculateBalances(expenses, group.participants);
-
-    // Calculate balance matrix (who owes whom)
     const balanceMatrix = calculateBalanceMatrix(expenses, group.participants);
-
-    // Calculate summary
     const summary = calculateSummary(expenses);
+
+    const participantBalances = group.participants.map(participant => {
+      const balance = balances.find(b => b.participantId.toString() === participant._id.toString());
+      return {
+        participantId: participant._id,
+        participantName: participant.name,
+        netBalance: balance ? balance.netBalance : 0,
+        totalPaid: balance ? balance.totalPaid : 0,
+        totalOwed: balance ? balance.totalOwed : 0
+      };
+    });
 
     res.status(200).json({
       success: true,
@@ -53,21 +55,31 @@ export const getBalances = async (req, res, next) => {
           name: group.name
         },
         balances,
+        participantBalances,
         balanceMatrix,
-        summary
+        summary,
+        netBalance: balances.find(b => {
+          const participant = group.participants.find(p => 
+            p.userId && p.userId.toString() === req.user._id.toString()
+          );
+          return participant && b.participantId.toString() === participant._id.toString();
+        })?.netBalance || 0
       }
     });
   } catch (error) {
-    next(error);
+    const statusCode = error.statusCode || 500;
+    const message = error.message || 'Internal Server Error';
+    res.status(statusCode).json({
+      success: false,
+      message
+    });
   }
 };
 
-// Get settlement suggestions for a group
-export const getSettlements = async (req, res, next) => {
+export const getSettlements = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Find the group
     const group = await Group.findById(id);
 
     if (!group) {
@@ -77,7 +89,6 @@ export const getSettlements = async (req, res, next) => {
       });
     }
 
-    // Check if user has access to this group
     const hasAccess = group.createdBy.toString() === req.user._id.toString() ||
       group.participants.some(p => p.userId && p.userId.toString() === req.user._id.toString());
 
@@ -88,14 +99,24 @@ export const getSettlements = async (req, res, next) => {
       });
     }
 
-    // Get all expenses for the group
     const expenses = await Expense.find({ group: id });
 
-    // Calculate minimal settlements
     const settlements = calculateMinimalSettlements(expenses, group.participants);
-
-    // Also provide balance information for context
     const { balances } = calculateBalances(expenses, group.participants);
+
+    const settlementSuggestions = settlements.map(settlement => {
+      const fromParticipant = group.participants.find(p => 
+        p._id.toString() === settlement.from.participantId.toString()
+      );
+      const toParticipant = group.participants.find(p => 
+        p._id.toString() === settlement.to.participantId.toString()
+      );
+      return {
+        from: fromParticipant?.name || 'Unknown',
+        to: toParticipant?.name || 'Unknown',
+        amount: settlement.amount
+      };
+    });
 
     res.status(200).json({
       success: true,
@@ -104,22 +125,25 @@ export const getSettlements = async (req, res, next) => {
           id: group._id,
           name: group.name
         },
-        settlements,
+        settlements: settlementSuggestions,
         balances,
-        totalTransactions: settlements.length
+        totalTransactions: settlementSuggestions.length
       }
     });
   } catch (error) {
-    next(error);
+    const statusCode = error.statusCode || 500;
+    const message = error.message || 'Internal Server Error';
+    res.status(statusCode).json({
+      success: false,
+      message
+    });
   }
 };
 
-// Get user-specific balance summary (what they owe and what's owed to them)
-export const getUserBalance = async (req, res, next) => {
+export const getUserBalance = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Find the group
     const group = await Group.findById(id);
 
     if (!group) {
@@ -129,7 +153,6 @@ export const getUserBalance = async (req, res, next) => {
       });
     }
 
-    // Check if user has access to this group
     const hasAccess = group.createdBy.toString() === req.user._id.toString() ||
       group.participants.some(p => p.userId && p.userId.toString() === req.user._id.toString());
 
@@ -140,7 +163,6 @@ export const getUserBalance = async (req, res, next) => {
       });
     }
 
-    // Find the participant that corresponds to the current user
     const userParticipant = group.participants.find(
       p => p.userId && p.userId.toString() === req.user._id.toString()
     );
@@ -152,13 +174,11 @@ export const getUserBalance = async (req, res, next) => {
       });
     }
 
-    // Get all expenses for the group
     const expenses = await Expense.find({ group: id });
 
-    // Calculate balances
     const { balances } = calculateBalances(expenses, group.participants);
-
-    // Find user's balance
+    const balanceMatrix = calculateBalanceMatrix(expenses, group.participants);
+    
     const userBalance = balances.find(
       b => b.participantId.toString() === userParticipant._id.toString()
     );
@@ -170,9 +190,6 @@ export const getUserBalance = async (req, res, next) => {
       });
     }
 
-    // Calculate what user owes to others and what others owe to user
-    const balanceMatrix = calculateBalanceMatrix(expenses, group.participants);
-    
     const owedByUser = balanceMatrix.filter(
       entry => entry.from.participantId.toString() === userParticipant._id.toString()
     );
@@ -196,6 +213,11 @@ export const getUserBalance = async (req, res, next) => {
       }
     });
   } catch (error) {
-    next(error);
+    const statusCode = error.statusCode || 500;
+    const message = error.message || 'Internal Server Error';
+    res.status(statusCode).json({
+      success: false,
+      message
+    });
   }
 };

@@ -1,13 +1,86 @@
 @import "tailwindcss";
 
-* {
-  margin: 0;
-  padding: 0;
+/* ----------------------------
+   CSS RESET (SAFE)
+----------------------------- */
+
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* ----------------------------
+   BODY DEFAULTS
+----------------------------- */
+
 body {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  margin: 0;
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+
+  line-height: 1.5; /* 🔑 VERY IMPORTANT */
+  background-color: #f8fafc;
+  color: #0f172a;
+
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* ----------------------------
+   FORM ELEMENT FIXES
+----------------------------- */
+
+input,
+button,
+textarea,
+select {
+  font: inherit;              /* inherit font properly */
+  line-height: inherit;       /* prevents vertical collapse */
+  color: inherit;
+}
+
+/* Remove iOS / browser weirdness */
+button {
+  background: none;
+  border: none;
+}
+
+/* Inputs must be block-level */
+input,
+textarea,
+select {
+  display: block;
+  width: 100%;
+}
+
+/* Prevent icon overlap in inputs */
+input::placeholder {
+  color: #94a3b8; /* slate-400 */
+}
+
+/* ----------------------------
+   MEDIA DEFAULTS
+----------------------------- */
+
+img,
+svg,
+video {
+  display: block;
+  max-width: 100%;
+}
+
+/* ----------------------------
+   LINKS
+----------------------------- */
+
+a {
+  color: inherit;
+  text-decoration: none;
 }

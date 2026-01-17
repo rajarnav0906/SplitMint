@@ -1,10 +1,8 @@
 import Group from '../models/Group.js';
 import User from '../models/User.js';
 
-// Get all groups for the authenticated user
-export const getGroups = async (req, res, next) => {
+export const getGroups = async (req, res) => {
   try {
-    // Find all groups created by the user or where user is a participant
     const groups = await Group.find({
       $or: [
         { createdBy: req.user._id },
@@ -13,7 +11,7 @@ export const getGroups = async (req, res, next) => {
     })
     .populate('createdBy', 'name email')
     .populate('participants.userId', 'name email')
-    .sort({ updatedAt: -1 }); // Most recently updated first
+    .sort({ updatedAt: -1 });
 
     res.status(200).json({
       success: true,
@@ -21,12 +19,16 @@ export const getGroups = async (req, res, next) => {
       data: { groups }
     });
   } catch (error) {
-    next(error);
+    const statusCode = error.statusCode || 500;
+    const message = error.message || 'Internal Server Error';
+    res.status(statusCode).json({
+      success: false,
+      message
+    });
   }
 };
 
-// Get a single group by ID
-export const getGroup = async (req, res, next) => {
+export const getGroup = async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -41,7 +43,6 @@ export const getGroup = async (req, res, next) => {
       });
     }
 
-    // Check if user has access to this group
     const hasAccess = group.createdBy._id.toString() === req.user._id.toString() ||
       group.participants.some(p => p.userId && p.userId._id.toString() === req.user._id.toString());
 
@@ -57,16 +58,19 @@ export const getGroup = async (req, res, next) => {
       data: { group }
     });
   } catch (error) {
-    next(error);
+    const statusCode = error.statusCode || 500;
+    const message = error.message || 'Internal Server Error';
+    res.status(statusCode).json({
+      success: false,
+      message
+    });
   }
 };
 
-// Create a new group
-export const createGroup = async (req, res, next) => {
+export const createGroup = async (req, res) => {
   try {
     const { name, participants } = req.body;
 
-    // Validate required fields
     if (!name || !name.trim()) {
       return res.status(400).json({
         success: false,
@@ -74,7 +78,13 @@ export const createGroup = async (req, res, next) => {
       });
     }
 
-    // Validate participants count (max 3 additional + primary user = 4 total)
+    if (name.trim().length > 100) {
+      return res.status(400).json({
+        success: false,
+        message: 'Group name cannot exceed 100 characters.'
+      });
+    }
+
     if (participants && participants.length > 3) {
       return res.status(400).json({
         success: false,
@@ -82,35 +92,62 @@ export const createGroup = async (req, res, next) => {
       });
     }
 
-    // Prepare participants array
     const participantsArray = participants || [];
 
-    // Add primary user as first participant if not already included
+    const userIds = new Set();
+    for (const p of participantsArray) {
+      if (p.userId) {
+        if (userIds.has(p.userId.toString())) {
+          return res.status(400).json({
+            success: false,
+            message: 'Duplicate users are not allowed in the group.'
+          });
+        }
+        userIds.add(p.userId.toString());
+      }
+    }
+
     const primaryUserIncluded = participantsArray.some(
       p => p.userId && p.userId.toString() === req.user._id.toString()
     );
 
     if (!primaryUserIncluded) {
-      // Fetch user details to add as primary participant
       const user = await User.findById(req.user._id);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found.'
+        });
+      }
       participantsArray.unshift({
         name: user.name,
         userId: user._id,
         color: null,
         avatar: null
       });
+    } else {
+      const primaryUserIndex = participantsArray.findIndex(
+        p => p.userId && p.userId.toString() === req.user._id.toString()
+      );
+      if (primaryUserIndex > 0) {
+        const primaryUser = participantsArray.splice(primaryUserIndex, 1)[0];
+        participantsArray.unshift(primaryUser);
+      }
     }
 
-    // Create new group
     const group = new Group({
       name: name.trim(),
       createdBy: req.user._id,
-      participants: participantsArray
+      participants: participantsArray.map(p => ({
+        name: p.name,
+        userId: p.userId || null,
+        color: p.color || null,
+        avatar: p.avatar || null
+      }))
     });
 
     await group.save();
 
-    // Populate before sending response
     await group.populate('createdBy', 'name email');
     await group.populate('participants.userId', 'name email');
 
@@ -120,7 +157,6 @@ export const createGroup = async (req, res, next) => {
       data: { group }
     });
   } catch (error) {
-    // Handle validation errors
     if (error.name === 'ValidationError') {
       const messages = Object.values(error.errors).map(err => err.message);
       return res.status(400).json({
@@ -129,17 +165,20 @@ export const createGroup = async (req, res, next) => {
         errors: messages
       });
     }
-    next(error);
+    const statusCode = error.statusCode || 500;
+    const message = error.message || 'Internal Server Error';
+    res.status(statusCode).json({
+      success: false,
+      message
+    });
   }
 };
 
-// Update a group
-export const updateGroup = async (req, res, next) => {
+export const updateGroup = async (req, res) => {
   try {
     const { id } = req.params;
     const { name, participants } = req.body;
 
-    // Find the group
     const group = await Group.findById(id);
 
     if (!group) {
@@ -149,7 +188,6 @@ export const updateGroup = async (req, res, next) => {
       });
     }
 
-    // Check if user is the creator
     if (group.createdBy.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
@@ -157,7 +195,6 @@ export const updateGroup = async (req, res, next) => {
       });
     }
 
-    // Update name if provided
     if (name !== undefined) {
       if (!name || !name.trim()) {
         return res.status(400).json({
@@ -165,12 +202,16 @@ export const updateGroup = async (req, res, next) => {
           message: 'Group name cannot be empty.'
         });
       }
+      if (name.trim().length > 100) {
+        return res.status(400).json({
+          success: false,
+          message: 'Group name cannot exceed 100 characters.'
+        });
+      }
       group.name = name.trim();
     }
 
-    // Update participants if provided
     if (participants !== undefined) {
-      // Validate participants count
       if (participants.length > 4) {
         return res.status(400).json({
           success: false,
@@ -178,13 +219,24 @@ export const updateGroup = async (req, res, next) => {
         });
       }
 
-      // Ensure primary user is included
+      const userIds = new Set();
+      for (const p of participants) {
+        if (p.userId) {
+          if (userIds.has(p.userId.toString())) {
+            return res.status(400).json({
+              success: false,
+              message: 'Duplicate users are not allowed in the group.'
+            });
+          }
+          userIds.add(p.userId.toString());
+        }
+      }
+
       const primaryUserIncluded = participants.some(
         p => p.userId && p.userId.toString() === req.user._id.toString()
       );
 
       if (!primaryUserIncluded) {
-        // Add primary user if not included
         const user = await User.findById(req.user._id);
         participants.unshift({
           name: user.name,
@@ -194,12 +246,16 @@ export const updateGroup = async (req, res, next) => {
         });
       }
 
-      group.participants = participants;
+      group.participants = participants.map(p => ({
+        name: p.name,
+        userId: p.userId || null,
+        color: p.color || null,
+        avatar: p.avatar || null
+      }));
     }
 
     await group.save();
 
-    // Populate before sending response
     await group.populate('createdBy', 'name email');
     await group.populate('participants.userId', 'name email');
 
@@ -217,16 +273,19 @@ export const updateGroup = async (req, res, next) => {
         errors: messages
       });
     }
-    next(error);
+    const statusCode = error.statusCode || 500;
+    const message = error.message || 'Internal Server Error';
+    res.status(statusCode).json({
+      success: false,
+      message
+    });
   }
 };
 
-// Delete a group
-export const deleteGroup = async (req, res, next) => {
+export const deleteGroup = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Find the group
     const group = await Group.findById(id);
 
     if (!group) {
@@ -236,7 +295,6 @@ export const deleteGroup = async (req, res, next) => {
       });
     }
 
-    // Check if user is the creator
     if (group.createdBy.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
@@ -244,18 +302,12 @@ export const deleteGroup = async (req, res, next) => {
       });
     }
 
-    // Cascade delete: Delete all expenses associated with this group
-    // We'll import Expense model when we create it in Step 4
-    // For now, we'll set up the structure
     try {
       const { default: Expense } = await import('../models/Expense.js');
       await Expense.deleteMany({ group: id });
     } catch (importError) {
-      // Expense model doesn't exist yet, that's okay
-      // This will work once we create the Expense model in Step 4
     }
 
-    // Delete the group
     await Group.findByIdAndDelete(id);
 
     res.status(200).json({
@@ -263,17 +315,20 @@ export const deleteGroup = async (req, res, next) => {
       message: 'Group deleted successfully. All associated expenses have been removed.'
     });
   } catch (error) {
-    next(error);
+    const statusCode = error.statusCode || 500;
+    const message = error.message || 'Internal Server Error';
+    res.status(statusCode).json({
+      success: false,
+      message
+    });
   }
 };
 
-// Add a participant to a group
-export const addParticipant = async (req, res, next) => {
+export const addParticipant = async (req, res) => {
   try {
     const { id } = req.params;
     const { name, userId, color, avatar } = req.body;
 
-    // Validate required fields
     if (!name || !name.trim()) {
       return res.status(400).json({
         success: false,
@@ -281,7 +336,13 @@ export const addParticipant = async (req, res, next) => {
       });
     }
 
-    // Find the group
+    if (name.trim().length > 50) {
+      return res.status(400).json({
+        success: false,
+        message: 'Participant name cannot exceed 50 characters.'
+      });
+    }
+
     const group = await Group.findById(id);
 
     if (!group) {
@@ -291,7 +352,6 @@ export const addParticipant = async (req, res, next) => {
       });
     }
 
-    // Check if user is the creator
     if (group.createdBy.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
@@ -299,7 +359,6 @@ export const addParticipant = async (req, res, next) => {
       });
     }
 
-    // Check if group already has maximum participants
     if (group.participants.length >= 4) {
       return res.status(400).json({
         success: false,
@@ -307,7 +366,19 @@ export const addParticipant = async (req, res, next) => {
       });
     }
 
-    // Check if participant with same name or userId already exists
+    if (userId) {
+      const existingUserParticipant = group.participants.find(
+        p => p.userId && p.userId.toString() === userId.toString()
+      );
+
+      if (existingUserParticipant) {
+        return res.status(409).json({
+          success: false,
+          message: 'This user is already a participant in the group.'
+        });
+      }
+    }
+
     const existingParticipant = group.participants.find(
       p => (p.name.toLowerCase() === name.toLowerCase().trim()) ||
            (userId && p.userId && p.userId.toString() === userId)
@@ -320,7 +391,6 @@ export const addParticipant = async (req, res, next) => {
       });
     }
 
-    // Add new participant
     group.participants.push({
       name: name.trim(),
       userId: userId || null,
@@ -330,7 +400,6 @@ export const addParticipant = async (req, res, next) => {
 
     await group.save();
 
-    // Populate before sending response
     await group.populate('createdBy', 'name email');
     await group.populate('participants.userId', 'name email');
 
@@ -340,17 +409,20 @@ export const addParticipant = async (req, res, next) => {
       data: { group }
     });
   } catch (error) {
-    next(error);
+    const statusCode = error.statusCode || 500;
+    const message = error.message || 'Internal Server Error';
+    res.status(statusCode).json({
+      success: false,
+      message
+    });
   }
 };
 
-// Update a participant in a group
-export const updateParticipant = async (req, res, next) => {
+export const updateParticipant = async (req, res) => {
   try {
     const { id, participantId } = req.params;
     const { name, color, avatar } = req.body;
 
-    // Find the group
     const group = await Group.findById(id);
 
     if (!group) {
@@ -360,7 +432,6 @@ export const updateParticipant = async (req, res, next) => {
       });
     }
 
-    // Check if user is the creator
     if (group.createdBy.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
@@ -368,7 +439,6 @@ export const updateParticipant = async (req, res, next) => {
       });
     }
 
-    // Find the participant
     const participant = group.participants.id(participantId);
 
     if (!participant) {
@@ -378,7 +448,6 @@ export const updateParticipant = async (req, res, next) => {
       });
     }
 
-    // Don't allow updating the primary user's name (it should match their account)
     if (participant.userId && participant.userId.toString() === group.createdBy.toString()) {
       if (name && name.trim() !== participant.name) {
         return res.status(400).json({
@@ -388,8 +457,13 @@ export const updateParticipant = async (req, res, next) => {
       }
     }
 
-    // Update participant fields
     if (name !== undefined && name.trim()) {
+      if (name.trim().length > 50) {
+        return res.status(400).json({
+          success: false,
+          message: 'Participant name cannot exceed 50 characters.'
+        });
+      }
       participant.name = name.trim();
     }
     if (color !== undefined) {
@@ -401,7 +475,6 @@ export const updateParticipant = async (req, res, next) => {
 
     await group.save();
 
-    // Populate before sending response
     await group.populate('createdBy', 'name email');
     await group.populate('participants.userId', 'name email');
 
@@ -411,16 +484,19 @@ export const updateParticipant = async (req, res, next) => {
       data: { group }
     });
   } catch (error) {
-    next(error);
+    const statusCode = error.statusCode || 500;
+    const message = error.message || 'Internal Server Error';
+    res.status(statusCode).json({
+      success: false,
+      message
+    });
   }
 };
 
-// Remove a participant from a group
-export const removeParticipant = async (req, res, next) => {
+export const removeParticipant = async (req, res) => {
   try {
     const { id, participantId } = req.params;
 
-    // Find the group
     const group = await Group.findById(id);
 
     if (!group) {
@@ -430,7 +506,6 @@ export const removeParticipant = async (req, res, next) => {
       });
     }
 
-    // Check if user is the creator
     if (group.createdBy.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
@@ -438,7 +513,6 @@ export const removeParticipant = async (req, res, next) => {
       });
     }
 
-    // Find the participant
     const participant = group.participants.id(participantId);
 
     if (!participant) {
@@ -448,7 +522,6 @@ export const removeParticipant = async (req, res, next) => {
       });
     }
 
-    // Don't allow removing the primary user
     if (participant.userId && participant.userId.toString() === group.createdBy.toString()) {
       return res.status(400).json({
         success: false,
@@ -456,11 +529,9 @@ export const removeParticipant = async (req, res, next) => {
       });
     }
 
-    // Check if participant is involved in any expenses
     try {
       const { default: Expense } = await import('../models/Expense.js');
       
-      // Check if participant is a payer in any expense
       const expensesAsPayer = await Expense.find({ 
         group: id, 
         payer: participantId 
@@ -473,28 +544,23 @@ export const removeParticipant = async (req, res, next) => {
         });
       }
 
-      // Check if participant has splits in any expense
       const expensesWithSplits = await Expense.find({
         group: id,
         'splits.participantId': participantId
       });
 
       if (expensesWithSplits.length > 0) {
-        // Remove participant from expense splits
         await Expense.updateMany(
           { group: id },
           { $pull: { splits: { participantId: participantId } } }
         );
       }
     } catch (importError) {
-      // Expense model import failed, but that's okay - continue with removal
     }
 
-    // Remove the participant
     group.participants.pull(participantId);
     await group.save();
 
-    // Populate before sending response
     await group.populate('createdBy', 'name email');
     await group.populate('participants.userId', 'name email');
 
@@ -504,6 +570,11 @@ export const removeParticipant = async (req, res, next) => {
       data: { group }
     });
   } catch (error) {
-    next(error);
+    const statusCode = error.statusCode || 500;
+    const message = error.message || 'Internal Server Error';
+    res.status(statusCode).json({
+      success: false,
+      message
+    });
   }
 };
