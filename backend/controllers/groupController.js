@@ -456,22 +456,38 @@ export const removeParticipant = async (req, res, next) => {
       });
     }
 
-    // Remove expenses linked to this participant
-    // We'll handle this when we create the Expense model in Step 4
+    // Check if participant is involved in any expenses
     try {
       const { default: Expense } = await import('../models/Expense.js');
-      // Remove participant from expenses where they are the payer
-      await Expense.updateMany(
-        { group: id, payer: participantId },
-        { $unset: { payer: '' } }
-      );
-      // Remove participant from expense splits
-      await Expense.updateMany(
-        { group: id },
-        { $pull: { splits: { participantId: participantId } } }
-      );
+      
+      // Check if participant is a payer in any expense
+      const expensesAsPayer = await Expense.find({ 
+        group: id, 
+        payer: participantId 
+      });
+
+      if (expensesAsPayer.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Cannot remove participant. They are the payer for ${expensesAsPayer.length} expense(s). Please update or delete those expenses first.`
+        });
+      }
+
+      // Check if participant has splits in any expense
+      const expensesWithSplits = await Expense.find({
+        group: id,
+        'splits.participantId': participantId
+      });
+
+      if (expensesWithSplits.length > 0) {
+        // Remove participant from expense splits
+        await Expense.updateMany(
+          { group: id },
+          { $pull: { splits: { participantId: participantId } } }
+        );
+      }
     } catch (importError) {
-      // Expense model doesn't exist yet, that's okay
+      // Expense model import failed, but that's okay - continue with removal
     }
 
     // Remove the participant
