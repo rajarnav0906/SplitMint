@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
-import { LogOut, UserCircle, Plus, Users, DollarSign, TrendingUp, TrendingDown, ArrowRight, ShieldCheck, Zap, Calendar, Loader2, Sparkles, Activity } from "lucide-react";
+import { LogOut, UserCircle, Plus, Users, IndianRupee, TrendingUp, TrendingDown, ArrowRight, ShieldCheck, Zap, Calendar, Loader2, Sparkles, Activity } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import * as groupService from "../services/groupService.js";
 import * as expenseService from "../services/expenseService.js";
@@ -89,9 +89,9 @@ const Dashboard = () => {
       trend: null
     },
     { 
-      icon: DollarSign, 
+      icon: IndianRupee, 
       label: "Total Expenses", 
-      value: `$${stats.totalExpenses.toFixed(2)}`, 
+      value: `₹${stats.totalExpenses.toFixed(2)}`, 
       bgGradient: "from-emerald-500 to-emerald-600",
       iconBg: "bg-emerald-100",
       iconColor: "text-emerald-600",
@@ -100,7 +100,7 @@ const Dashboard = () => {
     { 
       icon: stats.netBalance >= 0 ? TrendingUp : TrendingDown, 
       label: "Net Balance", 
-      value: `$${Math.abs(stats.netBalance).toFixed(2)}`, 
+      value: `₹${Math.abs(stats.netBalance).toFixed(2)}`, 
       bgGradient: stats.netBalance >= 0 ? "from-green-500 to-green-600" : "from-red-500 to-red-600",
       iconBg: stats.netBalance >= 0 ? "bg-green-100" : "bg-red-100",
       iconColor: stats.netBalance >= 0 ? "text-green-600" : "text-red-600",
@@ -113,24 +113,30 @@ const Dashboard = () => {
       icon: Plus, 
       label: "Create Group", 
       description: "Start a new expense group", 
-      gradient: "from-blue-500 to-blue-600",
-      hoverGradient: "hover:from-blue-600 hover:to-blue-700",
+      bgColor: "bg-blue-50",
+      iconColor: "text-blue-600",
+      borderColor: "border-blue-200",
+      hoverBg: "hover:bg-blue-100",
       onClick: () => navigate("/groups") 
     },
     { 
       icon: Users, 
       label: "View Groups", 
       description: "Manage your groups", 
-      gradient: "from-purple-500 to-purple-600",
-      hoverGradient: "hover:from-purple-600 hover:to-purple-700",
+      bgColor: "bg-gray-50",
+      iconColor: "text-gray-600",
+      borderColor: "border-gray-200",
+      hoverBg: "hover:bg-gray-100",
       onClick: () => navigate("/groups") 
     },
     { 
-      icon: DollarSign, 
+      icon: IndianRupee, 
       label: "Add Expense", 
       description: "Record a new expense", 
-      gradient: "from-emerald-500 to-emerald-600",
-      hoverGradient: "hover:from-emerald-600 hover:to-emerald-700",
+      bgColor: "bg-emerald-50",
+      iconColor: "text-emerald-600",
+      borderColor: "border-emerald-200",
+      hoverBg: "hover:bg-emerald-100",
       onClick: () => navigate("/groups") 
     },
   ];
@@ -159,7 +165,7 @@ const Dashboard = () => {
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/30">
-                <DollarSign className="h-6 w-6 text-white" />
+                <IndianRupee className="h-6 w-6 text-white" />
               </div>
               <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-blue-700 bg-clip-text text-transparent">
                 SplitMint
@@ -234,17 +240,16 @@ const Dashboard = () => {
               <button
                 key={idx}
                 onClick={action.onClick}
-                className="group relative bg-white rounded-2xl border border-gray-200/50 p-6 text-left hover:border-transparent hover:shadow-2xl transition-all duration-300 overflow-hidden cursor-pointer animate-scale-in"
+                className={`group relative bg-white rounded-2xl border ${action.borderColor} p-6 text-left hover:shadow-lg transition-all duration-300 cursor-pointer animate-scale-in`}
                 style={{ animationDelay: `${idx * 0.1}s` }}
               >
-                <div className={`absolute inset-0 bg-gradient-to-br ${action.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-300`}></div>
                 <div className="relative z-10">
-                  <div className={`w-14 h-14 bg-gradient-to-br ${action.gradient} rounded-xl flex items-center justify-center mb-4 shadow-lg group-hover:scale-110 transition-transform duration-300`}>
-                    <action.icon className="h-7 w-7 text-white" />
+                  <div className={`w-14 h-14 ${action.bgColor} ${action.hoverBg} rounded-xl flex items-center justify-center mb-4 border ${action.borderColor} group-hover:scale-105 transition-all duration-300`}>
+                    <action.icon className={`h-7 w-7 ${action.iconColor}`} />
                   </div>
-                  <h3 className="font-bold text-gray-900 mb-2 group-hover:text-white transition-colors duration-300">{action.label}</h3>
-                  <p className="text-sm text-gray-600 group-hover:text-white/90 transition-colors duration-300">{action.description}</p>
-                  <ArrowRight className="h-5 w-5 text-gray-400 mt-4 group-hover:text-white group-hover:translate-x-2 transition-all duration-300" />
+                  <h3 className="font-bold text-gray-900 mb-2 transition-colors duration-300">{action.label}</h3>
+                  <p className="text-sm text-gray-600 transition-colors duration-300">{action.description}</p>
+                  <ArrowRight className="h-5 w-5 text-gray-400 mt-4 group-hover:text-gray-600 group-hover:translate-x-2 transition-all duration-300" />
                 </div>
               </button>
             ))}

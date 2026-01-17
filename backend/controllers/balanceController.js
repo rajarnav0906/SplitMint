@@ -112,8 +112,16 @@ export const getSettlements = async (req, res) => {
         p._id.toString() === settlement.to.participantId.toString()
       );
       return {
-        from: fromParticipant?.name || 'Unknown',
-        to: toParticipant?.name || 'Unknown',
+        from: {
+          participantId: settlement.from.participantId,
+          participantName: fromParticipant?.name || settlement.from.participantName || 'Unknown',
+          participantColor: settlement.from.participantColor || null
+        },
+        to: {
+          participantId: settlement.to.participantId,
+          participantName: toParticipant?.name || settlement.to.participantName || 'Unknown',
+          participantColor: settlement.to.participantColor || null
+        },
         amount: settlement.amount
       };
     });

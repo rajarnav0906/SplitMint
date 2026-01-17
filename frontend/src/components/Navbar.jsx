@@ -1,6 +1,6 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LogOut, UserCircle, Home, Users, DollarSign } from 'lucide-react';
+import { LogOut, UserCircle, Home, Users, IndianRupee } from 'lucide-react';
 
 const Navbar = () => {
   const { user, logout } = useAuth();
@@ -20,7 +20,7 @@ const Navbar = () => {
         <div className="flex items-center justify-between h-16">
           <Link to="/dashboard" className="flex items-center gap-3 group">
             <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/30 group-hover:shadow-xl group-hover:shadow-blue-500/40 transition-all duration-300 group-hover:scale-105">
-              <DollarSign className="h-6 w-6 text-white" />
+              <IndianRupee className="h-6 w-6 text-white" />
             </div>
             <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-blue-700 bg-clip-text text-transparent">
               SplitMint
