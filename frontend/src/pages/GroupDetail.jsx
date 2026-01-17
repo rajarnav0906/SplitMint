@@ -225,31 +225,35 @@ const GroupDetail = () => {
   const participantBalances = balances?.participantBalances || [];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20">
       <Navbar />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <button
           onClick={() => navigate('/groups')}
-          className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6 cursor-pointer"
+          className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6 cursor-pointer group transition-all duration-200 hover:translate-x-[-4px]"
         >
-          <ArrowLeft className="w-5 h-5" />
-          Back to Groups
+          <ArrowLeft className="w-5 h-5 group-hover:translate-x-[-4px] transition-transform" />
+          <span className="font-medium">Back to Groups</span>
         </button>
 
-        <div className="bg-white rounded-lg shadow p-6 mb-6">
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-gray-200/50 shadow-xl p-8 mb-6 animate-fade-in">
           <div className="flex justify-between items-start">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">{group.name}</h1>
+              <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 bg-clip-text text-transparent mb-3">
+                {group.name}
+              </h1>
               <div className="flex items-center gap-4 text-gray-600">
                 <div className="flex items-center gap-2">
-                  <Users className="w-5 h-5" />
-                  <span>{allParticipants.length} participants</span>
+                  <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-lg flex items-center justify-center">
+                    <Users className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <span className="font-medium">{allParticipants.length} participants</span>
                 </div>
               </div>
             </div>
             <button
               onClick={() => setShowExpenseModal(true)}
-              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition shadow-md hover:shadow-lg cursor-pointer"
+              className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3 rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all duration-300 shadow-lg shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40 hover:scale-105 cursor-pointer font-semibold"
             >
               <Plus className="w-5 h-5" />
               Add Expense
@@ -258,34 +262,40 @@ const GroupDetail = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center gap-3 mb-2">
-              <DollarSign className="w-6 h-6 text-blue-600" />
-              <h3 className="text-lg font-semibold text-gray-900">Total Spent</h3>
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-gray-200/50 shadow-lg p-6 hover:shadow-xl transition-all duration-300 animate-fade-in">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl flex items-center justify-center">
+                <DollarSign className="w-6 h-6 text-blue-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900">Total Spent</h3>
             </div>
-            <p className="text-2xl font-bold text-gray-900">
+            <p className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
               ${totalSpent.toFixed(2)}
             </p>
           </div>
 
           {balances && (
             <>
-              <div className="bg-white rounded-lg shadow p-6">
-                <div className="flex items-center gap-3 mb-2">
-                  <TrendingUp className="w-6 h-6 text-red-600" />
-                  <h3 className="text-lg font-semibold text-gray-900">You Owe</h3>
+              <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-gray-200/50 shadow-lg p-6 hover:shadow-xl transition-all duration-300 animate-fade-in">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 bg-gradient-to-br from-red-100 to-pink-100 rounded-xl flex items-center justify-center">
+                    <TrendingUp className="w-6 h-6 text-red-600" />
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900">You Owe</h3>
                 </div>
-                <p className="text-2xl font-bold text-red-600">
+                <p className="text-3xl font-bold text-red-600">
                   ${Math.abs(balances.netBalance < 0 ? balances.netBalance : 0).toFixed(2)}
                 </p>
               </div>
 
-              <div className="bg-white rounded-lg shadow p-6">
-                <div className="flex items-center gap-3 mb-2">
-                  <TrendingDown className="w-6 h-6 text-green-600" />
-                  <h3 className="text-lg font-semibold text-gray-900">Owed to You</h3>
+              <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-gray-200/50 shadow-lg p-6 hover:shadow-xl transition-all duration-300 animate-fade-in">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 bg-gradient-to-br from-green-100 to-emerald-100 rounded-xl flex items-center justify-center">
+                    <TrendingDown className="w-6 h-6 text-green-600" />
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900">Owed to You</h3>
                 </div>
-                <p className="text-2xl font-bold text-green-600">
+                <p className="text-3xl font-bold text-green-600">
                   ${(balances.netBalance > 0 ? balances.netBalance : 0).toFixed(2)}
                 </p>
               </div>
